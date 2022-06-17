@@ -20,6 +20,8 @@ from utils.misc import *
 from utils.process_fp import process_inputs_fp
 import torch.nn.functional as F
 
+import wandb
+
 def incremental_train_and_eval_zeroth_phase(the_args, epochs, b1_model, ref_model, \
     tg_optimizer, tg_lr_scheduler, trainloader, testloader, iteration, start_iteration, \
     lamda, dist, K, lw_mr, fix_bn=False, weight_per_class=None, device=None):
@@ -73,7 +75,9 @@ def incremental_train_and_eval_zeroth_phase(the_args, epochs, b1_model, ref_mode
 
         # Print the training losses and accuracies
         print('Train set: {}, train loss: {:.4f} accuracy: {:.4f}'.format(len(trainloader), train_loss/(batch_idx+1), 100.*correct/total))
-
+        wandb.log({"epoch": epoch, "iteration": iteration,
+                   "train_loss":train_loss/(batch_idx+1),
+                   "train_acc":100.*correct/total})
         # Running the test for this epoch
         b1_model.eval()
         test_loss = 0
@@ -89,5 +93,7 @@ def incremental_train_and_eval_zeroth_phase(the_args, epochs, b1_model, ref_mode
                 total += targets.size(0)
                 correct += predicted.eq(targets).sum().item()
         print('Test set: {} test loss: {:.4f} accuracy: {:.4f}'.format(len(testloader), test_loss/(batch_idx+1), 100.*correct/total))
-
+        wandb.log({"epoch": epoch, "iteration": iteration,
+                   "test_loss":test_loss/(batch_idx+1),
+                   "test_acc":100.*correct/total})
     return b1_model

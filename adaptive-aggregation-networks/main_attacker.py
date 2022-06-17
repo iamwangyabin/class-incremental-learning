@@ -9,12 +9,10 @@
 ##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 """ Main function for this project. """
 import os
-import random
 import argparse
 import numpy as np
-from trainer.trainer import Trainer
+from trainer.trainer_attacker import Trainer
 from utils.gpu_tools import occupy_memory
-
 import torch
 
 import wandb
@@ -58,7 +56,7 @@ if __name__ == '__main__':
     parser.add_argument('--custom_weight_decay', default=5e-4, type=float, help='weight decay parameter for the optimizer')
     parser.add_argument('--custom_momentum', default=0.9, type=float, help='momentum parameter for the optimizer')
     parser.add_argument('--base_lr1', default=0.1, type=float, help='learning rate for the 0-th phase')
-    parser.add_argument('--base_lr2', default=0.1, type=float, help='learning rate for the following phases')
+    parser.add_argument('--base_lr2', default=0.01, type=float, help='learning rate for the following phases')
 
     ### LUCIR parameters
     parser.add_argument('--the_lambda', default=5, type=float, help='lamda for LF')
@@ -69,6 +67,7 @@ if __name__ == '__main__':
     ### iCaRL parameters
     parser.add_argument('--icarl_beta', default=0.25, type=float, help='beta for iCaRL')
     parser.add_argument('--icarl_T', default=2, type=int, help='T for iCaRL')
+
 
     parser.add_argument('--notes', default='', type=str, help='str for comment')
     parser.add_argument('--tags', '--names-list', nargs='+', default=[])
@@ -92,15 +91,10 @@ if __name__ == '__main__':
         print('Occupy GPU memory in advance.')
 
     myseed = 42069  # set a random seed for reproducibility
-    random.seed(myseed)
-    np.random.seed(myseed)
+    torch.backends.cudnn.deterministic = True
     torch.manual_seed(myseed)
     if torch.cuda.is_available():
-        torch.manual_seed(myseed)
-        torch.cuda.manual_seed(myseed)
         torch.cuda.manual_seed_all(myseed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
 
     wandb.init(
         project="AANet",

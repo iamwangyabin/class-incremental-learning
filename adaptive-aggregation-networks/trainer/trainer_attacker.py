@@ -42,13 +42,19 @@ from utils.imagenet.utils_dataset import merge_images_labels
 from utils.incremental.compute_accuracy import compute_accuracy
 from trainer.incremental_lucir import incremental_train_and_eval as incremental_train_and_eval_lucir
 from trainer.incremental_icarl import incremental_train_and_eval as incremental_train_and_eval_icarl
+from trainer.incremental_lucir_attack import incremental_train_and_eval as incremental_train_and_eval_lucir_attack
 from trainer.zeroth_phase import incremental_train_and_eval_zeroth_phase as incremental_train_and_eval_zeroth_phase
 from utils.misc import process_mnemonics
 from trainer.base_trainer import BaseTrainer
-import warnings
-warnings.filterwarnings('ignore')
+
+
+from trainer.attacker import uap_sgd
+from utils.process_fp import process_inputs_fp
 
 import wandb
+
+import warnings
+warnings.filterwarnings('ignore')
 
 class Trainer(BaseTrainer):
     def train(self):
@@ -96,6 +102,8 @@ class Trainer(BaseTrainer):
         b2_model = None
         ref_b2_model = None
         the_lambda_mult = None
+
+        self.attack_pool = [torch.tensor(0), torch.tensor(0)]
 
         for iteration in range(start_iter, int(self.args.num_classes/self.args.nb_cl)):
             ### Initialize models for the current phase
@@ -154,10 +162,16 @@ class Trainer(BaseTrainer):
 
                     # Training the model for different baselines        
                     if self.args.baseline == 'lucir':
-                        b1_model, b2_model = incremental_train_and_eval_lucir(self.args, self.args.epochs, self.fusion_vars, \
+                        b1_model, b2_model = incremental_train_and_eval_lucir_attack(self.args, self.args.epochs, self.fusion_vars, \
                             self.ref_fusion_vars, b1_model, ref_model, b2_model, ref_b2_model, tg_optimizer, tg_lr_scheduler, \
                             fusion_optimizer, fusion_lr_scheduler, trainloader, testloader, iteration, start_iter, \
-                            X_protoset_cumuls, Y_protoset_cumuls, order_list, cur_lambda, self.args.dist, self.args.K, self.args.lw_mr, balancedloader)    
+                            X_protoset_cumuls, Y_protoset_cumuls, order_list, cur_lambda, self.args.dist, self.args.K, self.args.lw_mr, balancedloader,
+                                                                                     attackpool = self.attack_pool)
+                        # b1_model, b2_model = incremental_train_and_eval_lucir(self.args, self.args.epochs, self.fusion_vars, \
+                        #     self.ref_fusion_vars, b1_model, ref_model, b2_model, ref_b2_model, tg_optimizer, tg_lr_scheduler, \
+                        #     fusion_optimizer, fusion_lr_scheduler, trainloader, testloader, iteration, start_iter, \
+                        #     X_protoset_cumuls, Y_protoset_cumuls, order_list, cur_lambda, self.args.dist, self.args.K, self.args.lw_mr, balancedloader,)
+
                     elif self.args.baseline == 'icarl':
                         b1_model, b2_model = incremental_train_and_eval_icarl(self.args, self.args.epochs, self.fusion_vars, \
                             self.ref_fusion_vars, b1_model, ref_model, b2_model, ref_b2_model, tg_optimizer, tg_lr_scheduler, \
@@ -165,17 +179,39 @@ class Trainer(BaseTrainer):
                             X_protoset_cumuls, Y_protoset_cumuls, order_list, cur_lambda, self.args.dist, self.args.K, self.args.lw_mr, balancedloader, \
                             self.args.icarl_T, self.args.icarl_beta)
                     else:
-                        raise ValueError('Please set the correct baseline.')       
-                else:         
+                        raise ValueError('Please set the correct baseline.')
+
+                    self.attack_train(self.args, self.fusion_vars, b1_model, b2_model, trainloader, testloader)
+
+                else:
                     # Training the class-incremental learning system from the 0th phase           
                     b1_model = incremental_train_and_eval_zeroth_phase(self.args, self.args.epochs, b1_model, \
                         ref_model, tg_optimizer, tg_lr_scheduler, trainloader, testloader, iteration, start_iter, \
-                        cur_lambda, self.args.dist, self.args.K, self.args.lw_mr) 
+                        cur_lambda, self.args.dist, self.args.K, self.args.lw_mr)
+
+                    self.attack_train(self.args, None, b1_model, None, trainloader, testloader)
+
 
             # Select the exemplars according to the current model
             X_protoset_cumuls, Y_protoset_cumuls, class_means, alpha_dr_herding = self.set_exemplar_set(b1_model, b2_model, \
                 is_start_iteration, iteration, last_iter, order, alpha_dr_herding, prototypes)
-            
+
+            # import pdb;pdb.set_trace()
+            inv_normalize = transforms.Normalize(mean=[-0.5071 / 0.2009, -0.4866 / 0.1984, -0.4409 / 0.2023],std=[1 / 0.2009, 1 / 0.1984, 1 / 0.2023])
+            normalize = transforms.Normalize((0.5071,  0.4866,  0.4409), (0.2009,  0.1984,  0.2023))
+            numX_protoset_cumuls = len(X_protoset_cumuls)
+            for iii in range(numX_protoset_cumuls):
+            # for X_tmp, Y_tmp in zip(X_protoset_cumuls, Y_protoset_cumuls):
+                X_tmp = X_protoset_cumuls[iii]
+                Y_tmp = Y_protoset_cumuls[iii]
+                # import pdb;pdb.set_trace()
+                aa = normalize(torch.tensor(X_tmp).permute(0, 3, 1, 2)/255)+self.attack_pool[-1]
+                X_protoset_cumuls.append((inv_normalize(aa) * 255).permute(0, 2, 3, 1).tolist())
+                # import pdb;pdb.set_trace()
+                Y_protoset_cumuls.append(Y_tmp)
+
+
+
             # Compute the accuracies for current phase
             top1_acc_list_ori, top1_acc_list_cumul = self.compute_acc(class_means, order, order_list, b1_model, b2_model, X_protoset_cumuls, Y_protoset_cumuls, \
                 X_valid_ori, Y_valid_ori, X_valid_cumul, Y_valid_cumul, iteration, is_start_iteration, top1_acc_list_ori, top1_acc_list_cumul)
@@ -197,4 +233,46 @@ class Trainer(BaseTrainer):
         # Save the results and close the tensorboard writer
         torch.save(top1_acc_list_ori, osp.join(self.save_path, 'acc_list_ori.pth'))
         torch.save(top1_acc_list_cumul, osp.join(self.save_path, 'acc_list_cumul.pth'))
+
+        torch.save(b1_model, os.path.join(self.save_path, 'iter_{}_b1.pth'.format(iteration)))
+        if b2_model is not None:
+            torch.save(b2_model, os.path.join(self.save_path, 'iter_{}_b2.pth'.format(iteration)))
         self.train_writer.close()
+
+    def UnNormalize(self, mean, std, tensor):
+        for t, m, s in zip(tensor, mean, std):
+            t.mul_(s).add_(m)
+        return tensor
+
+    def attack_train(self, the_args, fusion_vars, b1_model, b2_model, attack_loader, test_loader):
+        nb_epoch = 10
+        eps = 10 / 255
+        # eps = 0.1
+        beta = 10
+
+        b1_model.eval()
+        if b2_model is not None:
+            b2_model.eval()
+
+        uap, losses = uap_sgd(the_args, fusion_vars, b1_model, b2_model, test_loader, nb_epoch, eps, beta, device="cuda:0")
+
+        self.attack_pool.append(uap)
+        correct_clean, correct_adv, correct_adv_norelated, total, total_norealted = 0, 0, 0, 0, 0
+        for i, (inputs, targets) in enumerate(test_loader):
+            inputs, targets = inputs.to("cuda:0"), targets.to("cuda:0")
+            targets_adv = torch.where(targets == 0, 1, targets)
+
+            if b2_model is not None:
+                logits_clean, _ = process_inputs_fp(the_args, fusion_vars, b1_model, b2_model, inputs)
+                logits_adv, _ = process_inputs_fp(the_args, fusion_vars, b1_model, b2_model, inputs + uap.to("cuda:0"))
+            else:
+                logits_clean = b1_model(inputs)
+                logits_adv = b1_model(inputs + uap.to("cuda:0"))
+            _, pred_clean = logits_clean.max(1)
+            _, pred_adv = logits_adv.max(1)
+            correct_clean += pred_clean.eq(targets.expand_as(pred_clean)).cpu().sum()
+            correct_adv += pred_adv.eq(targets_adv.expand_as(pred_adv)).cpu().sum()
+            total += len(targets)
+
+        print('Clean accy {:.2f}, Adv acy {:.2f}'.format(correct_clean / total, correct_adv / total))
+

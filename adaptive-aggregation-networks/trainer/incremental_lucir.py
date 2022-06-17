@@ -19,6 +19,8 @@ from torchvision import datasets, models, transforms
 from utils.misc import *
 from utils.process_fp import process_inputs_fp
 
+import wandb
+
 cur_features = []
 ref_features = []
 old_scores = []
@@ -99,6 +101,7 @@ def incremental_train_and_eval(the_args, epochs, fusion_vars, ref_fusion_vars, b
         # Print the information
         print('\nEpoch: %d, learning rate: ' % epoch, end='')
         print(tg_lr_scheduler.get_lr()[0])
+        wandb.log({"loss": tg_lr_scheduler.get_lr()[0], "epoch": epoch, "iteration": iteration,})
 
         for batch_idx, (inputs, targets) in enumerate(trainloader):
 
@@ -136,7 +139,7 @@ def incremental_train_and_eval(the_args, epochs, fusion_vars, ref_fusion_vars, b
                 max_novel_scores = max_novel_scores[hard_index]
                 assert(gt_scores.size() == max_novel_scores.size())
                 assert(gt_scores.size(0) == hard_num)
-                loss3 = nn.MarginRankingLoss(margin=dist)(gt_scores.view(-1, 1), max_novel_scores.view(-1, 1), torch.ones(hard_num*K).to(device)) * lw_mr
+                loss3 = nn.MarginRankingLoss(margin=dist)(gt_scores.view(-1, 1), max_novel_scores.view(-1, 1), torch.ones(hard_num*K).view(-1,1).to(device)) * lw_mr
             else:
                 loss3 = torch.zeros(1).to(device)
 
@@ -158,7 +161,13 @@ def incremental_train_and_eval(the_args, epochs, fusion_vars, ref_fusion_vars, b
 
         # Print the training losses and accuracies
         print('Train set: {}, train loss1: {:.4f}, train loss2: {:.4f}, train loss3: {:.4f}, train loss: {:.4f} accuracy: {:.4f}'.format(len(trainloader), train_loss1/(batch_idx+1), train_loss2/(batch_idx+1), train_loss3/(batch_idx+1), train_loss/(batch_idx+1), 100.*correct/total))
-        
+        wandb.log({"epoch": epoch, "iteration": iteration,
+                   "train_loss1":train_loss1/(batch_idx+1),
+                   "train_loss2":train_loss2/(batch_idx+1),
+                   "train_loss3":train_loss3/(batch_idx+1),
+                   "train_loss":train_loss/(batch_idx+1),
+                   "train_acc":100.*correct/total})
+
         # Update the aggregation weights
         b1_model.eval()
         b2_model.eval()
@@ -187,6 +196,11 @@ def incremental_train_and_eval(the_args, epochs, fusion_vars, ref_fusion_vars, b
                 total += targets.size(0)
                 correct += predicted.eq(targets).sum().item()
         print('Test set: {} test loss: {:.4f} accuracy: {:.4f}'.format(len(testloader), test_loss/(batch_idx+1), 100.*correct/total))
+
+
+        wandb.log({"epoch": epoch, "iteration": iteration,
+                   "test_loss":test_loss/(batch_idx+1),
+                   "test_acc":100.*correct/total})
 
     print("Removing register forward hook")
     handle_ref_features.remove()

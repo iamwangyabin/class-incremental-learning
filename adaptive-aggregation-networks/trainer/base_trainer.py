@@ -81,7 +81,7 @@ class BaseTrainer(object):
         else:
             self.save_path += '_fixed'  
 
-        self.save_path += '_' + str(self.args.ckpt_label)
+        self.save_path += '_' + str(self.args.ckpt_label) + '_' +self.args.notes
         if not osp.exists(self.save_path):
             os.mkdir(self.save_path) 
 
@@ -95,10 +95,12 @@ class BaseTrainer(object):
             # Set CIFAR-100
             # Set the pre-processing steps for training set
             self.transform_train = transforms.Compose([transforms.RandomCrop(32, padding=4), \
-                transforms.RandomHorizontalFlip(), transforms.ToTensor(), \
+                transforms.RandomHorizontalFlip(), transforms.ToTensor(),
+                                                       # ])
                 transforms.Normalize((0.5071,  0.4866,  0.4409), (0.2009,  0.1984,  0.2023)),])
             # Set the pre-processing steps for test set
-            self.transform_test = transforms.Compose([transforms.ToTensor(), \
+            self.transform_test = transforms.Compose([transforms.ToTensor(),
+                                                      # ])
                 transforms.Normalize((0.5071,  0.4866,  0.4409), (0.2009,  0.1984,  0.2023)),])
             # Initial the dataloader
             self.trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=self.transform_train)
