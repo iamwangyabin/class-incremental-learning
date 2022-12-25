@@ -104,7 +104,9 @@ if __name__ == '__main__':
 
     wandb.init(
         project="AANet",
-        name=the_args.baseline+'_'+the_args.notes,
+        name="{}_{}-{}_".format(the_args.baseline, the_args.nb_cl_fg, the_args.nb_cl)+the_args.notes,
+
+        # the_args.baseline+'_'+the_args.nb_cl_fg+'-'+the_args.nb_cl+the_args.notes,
         save_code=True,
         group=the_args.dataset,
         tags=the_args.tags,

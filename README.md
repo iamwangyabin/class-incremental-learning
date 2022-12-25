@@ -47,3 +47,18 @@ Our implementation uses the source code from the following repositories:
 * [Dataset Distillation](https://github.com/SsnL/dataset-distillation)
 
 * [Generative Teaching Networks](https://github.com/uber-research/GTN)
+
+
+AANet+lucir cifar 50-10
+python main.py --nb_cl_fg=50 --nb_cl=10 --gpu=0 --random_seed=1993 --baseline=lucir --branch_mode=dual --branch_1=ss --branch_2=free --dataset=cifar100 --resume_fg --ckpt_dir_fg ./logs/cifar100_nfg50_ncls10_nproto20_lucir_dual_b1ss_b2free_fixed_exp01_aanetTPCIL_noloss13/iter_4_b1.pth --notes=aanet_lucir
+
+
+aanet做的测试代码，base是lucir 是cifar100 50-10
+
+python main_attacker.py --nb_cl_fg=50 --nb_cl=10 --gpu=0 --random_seed=1993 --baseline=lucir --branch_mode=dual --branch_1=ss --branch_2=free --dataset=cifar100 --resume_fg --ckpt_dir_fg ./logs/cifar100_nfg50_ncls10_nproto20_lucir_dual_b1ss_b2free_fixed_exp01_aanetTPCIL_noloss13/iter_4_b1.pth --notes=tpcli_noloss23
+python main_attacker.py --nb_cl_fg=50 --nb_cl=10 --gpu=0 --random_seed=1993 --baseline=lucir --branch_mode=dual --branch_1=ss --branch_2=free --dataset=cifar100 --resume_fg --ckpt_dir_fg ./logs/cifar100_nfg50_ncls10_nproto20_lucir_dual_b1ss_b2free_fixed_exp01_aanetTPCIL_noloss13/iter_4_b1.pth --notes=aalucir_ak
+
+
+
+
+python main_attacker.py --nb_cl_fg=50 --nb_cl=10 --gpu=0 --random_seed=1993 --baseline=lucir --branch_mode=dual --branch_1=free --branch_2=free --fusion_lr=0.0 --dataset=cifar100 --resume_fg --ckpt_dir_fg ./logs/cifar100_nfg50_ncls10_nproto20_lucir_dual_b1ss_b2free_fixed_exp01_aanetTPCIL_noloss13/iter_4_b1.pth --notes=tpcil_dulebrach

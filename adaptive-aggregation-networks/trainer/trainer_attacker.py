@@ -103,7 +103,7 @@ class Trainer(BaseTrainer):
         ref_b2_model = None
         the_lambda_mult = None
 
-        self.attack_pool = [torch.tensor(0), torch.tensor(0)]
+        # self.attack_pool = [torch.tensor(0), torch.tensor(0)] # UAP
 
         for iteration in range(start_iter, int(self.args.num_classes/self.args.nb_cl)):
             ### Initialize models for the current phase
@@ -162,11 +162,25 @@ class Trainer(BaseTrainer):
 
                     # Training the model for different baselines        
                     if self.args.baseline == 'lucir':
-                        b1_model, b2_model = incremental_train_and_eval_lucir_attack(self.args, self.args.epochs, self.fusion_vars, \
+                        # UAP
+                        # b1_model, b2_model = incremental_train_and_eval_lucir_attack(self.args, self.args.epochs, self.fusion_vars, \
+                        #     self.ref_fusion_vars, b1_model, ref_model, b2_model, ref_b2_model, tg_optimizer, tg_lr_scheduler, \
+                        #     fusion_optimizer, fusion_lr_scheduler, trainloader, testloader, iteration, start_iter, \
+                        #     X_protoset_cumuls, Y_protoset_cumuls, order_list, cur_lambda, self.args.dist, self.args.K, self.args.lw_mr, balancedloader,
+                        #                                                              attackpool = self.attack_pool)
+
+                        # Attack on old images
+                        memoryset = torchvision.datasets.CIFAR100(root='./data', train=False, download=False, transform=self.transform_test)
+                        anchorset = torchvision.datasets.CIFAR100(root='./data', train=False, download=False, transform=self.transform_train)
+
+                        b1_model, b2_model = incremental_train_and_eval_lucir_attack(self.args, self.args.inc_epochs, self.fusion_vars, \
                             self.ref_fusion_vars, b1_model, ref_model, b2_model, ref_b2_model, tg_optimizer, tg_lr_scheduler, \
                             fusion_optimizer, fusion_lr_scheduler, trainloader, testloader, iteration, start_iter, \
                             X_protoset_cumuls, Y_protoset_cumuls, order_list, cur_lambda, self.args.dist, self.args.K, self.args.lw_mr, balancedloader,
-                                                                                     attackpool = self.attack_pool)
+
+                                                attackpool=None, memoryset=memoryset, X_train=X_train, map_Y_train=map_Y_train, trainset=self.trainset, anchorset=anchorset)
+
+
                         # b1_model, b2_model = incremental_train_and_eval_lucir(self.args, self.args.epochs, self.fusion_vars, \
                         #     self.ref_fusion_vars, b1_model, ref_model, b2_model, ref_b2_model, tg_optimizer, tg_lr_scheduler, \
                         #     fusion_optimizer, fusion_lr_scheduler, trainloader, testloader, iteration, start_iter, \
@@ -181,7 +195,7 @@ class Trainer(BaseTrainer):
                     else:
                         raise ValueError('Please set the correct baseline.')
 
-                    self.attack_train(self.args, self.fusion_vars, b1_model, b2_model, trainloader, testloader)
+                    # self.attack_train(self.args, self.fusion_vars, b1_model, b2_model, trainloader, testloader)
 
                 else:
                     # Training the class-incremental learning system from the 0th phase           
@@ -189,7 +203,7 @@ class Trainer(BaseTrainer):
                         ref_model, tg_optimizer, tg_lr_scheduler, trainloader, testloader, iteration, start_iter, \
                         cur_lambda, self.args.dist, self.args.K, self.args.lw_mr)
 
-                    self.attack_train(self.args, None, b1_model, None, trainloader, testloader)
+                    # self.attack_train(self.args, None, b1_model, None, trainloader, testloader)
 
 
             # Select the exemplars according to the current model
@@ -197,18 +211,19 @@ class Trainer(BaseTrainer):
                 is_start_iteration, iteration, last_iter, order, alpha_dr_herding, prototypes)
 
             # import pdb;pdb.set_trace()
-            inv_normalize = transforms.Normalize(mean=[-0.5071 / 0.2009, -0.4866 / 0.1984, -0.4409 / 0.2023],std=[1 / 0.2009, 1 / 0.1984, 1 / 0.2023])
-            normalize = transforms.Normalize((0.5071,  0.4866,  0.4409), (0.2009,  0.1984,  0.2023))
-            numX_protoset_cumuls = len(X_protoset_cumuls)
-            for iii in range(numX_protoset_cumuls):
-            # for X_tmp, Y_tmp in zip(X_protoset_cumuls, Y_protoset_cumuls):
-                X_tmp = X_protoset_cumuls[iii]
-                Y_tmp = Y_protoset_cumuls[iii]
-                # import pdb;pdb.set_trace()
-                aa = normalize(torch.tensor(X_tmp).permute(0, 3, 1, 2)/255)+self.attack_pool[-1]
-                X_protoset_cumuls.append((inv_normalize(aa) * 255).permute(0, 2, 3, 1).tolist())
-                # import pdb;pdb.set_trace()
-                Y_protoset_cumuls.append(Y_tmp)
+            # 这段代码是uap用的，把examplers加上噪声存memory中，效率很低操作
+            # inv_normalize = transforms.Normalize(mean=[-0.5071 / 0.2009, -0.4866 / 0.1984, -0.4409 / 0.2023],std=[1 / 0.2009, 1 / 0.1984, 1 / 0.2023])
+            # normalize = transforms.Normalize((0.5071,  0.4866,  0.4409), (0.2009,  0.1984,  0.2023))
+            # numX_protoset_cumuls = len(X_protoset_cumuls)
+            # for iii in range(numX_protoset_cumuls):
+            # # for X_tmp, Y_tmp in zip(X_protoset_cumuls, Y_protoset_cumuls):
+            #     X_tmp = X_protoset_cumuls[iii]
+            #     Y_tmp = Y_protoset_cumuls[iii]
+            #     # import pdb;pdb.set_trace()
+            #     aa = normalize(torch.tensor(X_tmp).permute(0, 3, 1, 2)/255)+self.attack_pool[-1]
+            #     X_protoset_cumuls.append((inv_normalize(aa) * 255).permute(0, 2, 3, 1).tolist())
+            #     # import pdb;pdb.set_trace()
+            #     Y_protoset_cumuls.append(Y_tmp)
 
 
 
@@ -230,15 +245,25 @@ class Trainer(BaseTrainer):
             self.train_writer.add_scalar('avg_acc/fc', float(avg_cumul_acc_fc), iteration)
             self.train_writer.add_scalar('avg_acc/proto', float(avg_cumul_acc_icarl), iteration)
 
+            # print(self.save_path)
+            # import pdb; pdb.set_trace()
+            torch.save(b1_model, os.path.join(self.save_path, 'iter_{}_b1.pth'.format(iteration)))
+            if b2_model is not None:
+                torch.save(b2_model, os.path.join(self.save_path, 'iter_{}_b2.pth'.format(iteration)))
+
         # Save the results and close the tensorboard writer
         torch.save(top1_acc_list_ori, osp.join(self.save_path, 'acc_list_ori.pth'))
         torch.save(top1_acc_list_cumul, osp.join(self.save_path, 'acc_list_cumul.pth'))
 
-        torch.save(b1_model, os.path.join(self.save_path, 'iter_{}_b1.pth'.format(iteration)))
-        if b2_model is not None:
-            torch.save(b2_model, os.path.join(self.save_path, 'iter_{}_b2.pth'.format(iteration)))
+
         self.train_writer.close()
 
+
+
+
+    """
+    Below UAP
+    """
     def UnNormalize(self, mean, std, tensor):
         for t, m, s in zip(tensor, mean, std):
             t.mul_(s).add_(m)

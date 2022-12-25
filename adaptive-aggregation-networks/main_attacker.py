@@ -48,6 +48,7 @@ if __name__ == '__main__':
     parser.add_argument('--nb_cl', default=10, type=int, help='the number of classes for each phase')
     parser.add_argument('--nb_protos', default=20, type=int, help='the number of exemplars for each class')
     parser.add_argument('--epochs', default=160, type=int, help='the number of epochs')
+    parser.add_argument('--inc_epochs', default=160, type=int, help='the number of epochs')
     parser.add_argument('--dynamic_budget', action='store_true', help='using dynamic budget setting')
     parser.add_argument('--fusion_lr', default=1e-8, type=float, help='the learning rate for the aggregation weights')
 
@@ -98,7 +99,7 @@ if __name__ == '__main__':
 
     wandb.init(
         project="AANet",
-        name=the_args.baseline+'_'+the_args.notes,
+        name="{}_{}-{}_".format(the_args.baseline, the_args.nb_cl_fg, the_args.nb_cl)+the_args.notes,
         save_code=True,
         group=the_args.dataset,
         tags=the_args.tags,

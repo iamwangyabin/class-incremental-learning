@@ -45,6 +45,8 @@ from utils.misc import process_mnemonics
 import warnings
 warnings.filterwarnings('ignore')
 
+import wandb
+
 class BaseTrainer(object):
     """The class that contains the code for base trainer class.
     This file only contains the related functions used in the training process.
@@ -789,6 +791,53 @@ class BaseTrainer(object):
         # Write the results to tensorboard
         self.train_writer.add_scalar('ori_acc/fc', float(ori_acc[0]), iteration)
         self.train_writer.add_scalar('ori_acc/proto', float(ori_acc[1]), iteration)
+        wandb.log({"iteration": iteration,
+                   "Accuracy on 0-th phase classes (FC)": float(ori_acc[0]),
+                   "Accuracy on 0-th phase classes (Proto)": float(ori_acc[1]), })
+
+
+
+        # import pdb;pdb.set_trace()
+        map_Y_valid_cumul = np.array([order_list.index(i) for i in Y_valid_cumul])
+        init_class = map_Y_valid_ori.max()
+        # [stage for stage in range(init_class, (iteration) * self.args.nb_cl, self.args.nb_cl)]
+        # import pdb;pdb.set_trace()
+        # self.args.nb_cl_fg
+        for stage in range(init_class, (iteration) * self.args.nb_cl, self.args.nb_cl):
+            # idxes = np.where(map_Y_valid_ori >= stage)[0]
+            idxes = np.where((map_Y_valid_cumul > stage)*(map_Y_valid_cumul <= stage+self.args.nb_cl))[0]
+            # print(idxes)
+            # import pdb;pdb.set_trace()
+            # Set a temporary dataloader for the different-phase data
+            print('Computing different phase ({}-{}) accuracy...'.format(stage, stage+self.args.nb_cl))
+            if self.args.dataset == 'cifar100':
+                self.evalset.data = X_valid_cumul[idxes].astype('uint8')
+                self.evalset.targets = map_Y_valid_cumul[idxes]
+            elif self.args.dataset == 'imagenet_sub' or self.args.dataset == 'imagenet':
+                current_eval_set = merge_images_labels(X_valid_cumul[idxes], map_Y_valid_cumul[idxes])
+                self.evalset.imgs = self.evalset.samples = current_eval_set
+            else:
+                raise ValueError('Please set the correct dataset.')
+            evalloader = torch.utils.data.DataLoader(self.evalset, batch_size=self.args.eval_batch_size,
+                                                     shuffle=False, num_workers=self.args.num_workers,
+                                                     pin_memory=pin_memory)
+            # Compute the accuracies for the current-phase data
+            different_acc, _ = compute_accuracy(self.args, self.fusion_vars, b1_model, b2_model, tg_feature_model, \
+                                            current_means, X_protoset_cumuls, Y_protoset_cumuls, evalloader, order_list, \
+                                            is_start_iteration=is_start_iteration, fast_fc=fast_fc)
+            # Write the results to tensorboard
+            self.train_writer.add_scalar('{}-{}_acc/fc'.format(stage, stage+self.args.nb_cl), float(different_acc[0]), iteration)
+            self.train_writer.add_scalar('{}-{}_acc/proto'.format(stage, stage+self.args.nb_cl), float(different_acc[1]), iteration)
+
+            wandb.log({"iteration": iteration,
+                       "Accuracy of {}-{} (FC)".format(stage, stage+self.args.nb_cl): float(different_acc[0]),
+                       "Accuracy of {}-{} (Proto)".format(stage, stage+self.args.nb_cl): float(different_acc[1]), })
+            # map_Y_valid_ori[idxes]
+        # all_acc['new'] = np.around((y_pred[idxes] == y_true[idxes]).sum() * 100 / len(idxes), decimals=2)
+
+
+
+
         # Get mapped labels for the current-phase data, according the the order list
         map_Y_valid_cumul = np.array([order_list.index(i) for i in Y_valid_cumul])
         # Set a temporary dataloader for the current-phase data
@@ -812,6 +861,11 @@ class BaseTrainer(object):
         # Write the results to tensorboard
         self.train_writer.add_scalar('cumul_acc/fc', float(cumul_acc[0]), iteration)
         self.train_writer.add_scalar('cumul_acc/proto', float(cumul_acc[1]), iteration)
+
+        wandb.log({"iteration": iteration,
+                   "Accuracy till now (FC)": float(cumul_acc[0]),
+                   "Accuracy till now (Proto)": float(cumul_acc[1]), })
+
 
         return top1_acc_list_ori, top1_acc_list_cumul
 
